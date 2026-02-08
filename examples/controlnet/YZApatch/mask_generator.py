@@ -164,7 +164,7 @@ class ComplexMaskGenerator:
         # 使用cv2.ellipse的矩形模式（通过设置角度参数）
         # 或者使用cv2.boxPoints + cv2.fillPoly
         box = cv2.boxPoints(((center[0], center[1]), (width, height), angle))
-        box = np.int0(box)
+        box = box.astype(np.int32)
         cv2.fillPoly(mask, [box], 255)
     
     def draw_ellipse(self, mask: np.ndarray, center: Tuple[int, int], 
