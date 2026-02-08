@@ -1461,8 +1461,9 @@ def main(args):
                     masked_image = pixel_values_batch * preserve_mask
 
                     # VAE encode masked image -> masked_image_latents (4 channels)
+                    # Cast to vae.dtype to avoid "Input type (Half) and bias type (float) should be the same"
                     with torch.no_grad():
-                        masked_image_latents = vae.encode(masked_image).latent_dist.sample()
+                        masked_image_latents = vae.encode(masked_image.to(vae.dtype)).latent_dist.sample()
                         masked_image_latents = masked_image_latents * vae.config.scaling_factor
                     masked_image_latents = masked_image_latents.to(dtype=weight_dtype)
 
