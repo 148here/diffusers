@@ -1,0 +1,4 @@
+[MaskDebug] mask_debug_0012_brush0
+  edge_density: min=0.000000 max=0.764424 mean=0.243197 neg_count=0 nan_count=0
+  prob_map: min=0.000000 max=0.584345 sum=59977.437500 nan_count=0
+  used_uniform_fallback=False

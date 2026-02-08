@@ -6,6 +6,9 @@ conda activate jointdit121
 export HF_ENDPOINT=https://hf-mirror.com
 export HUGGINGFACE_HUB_ENDPOINT=https://hf-mirror.com
 
+ln -s /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/coco2017/DexiNed-master \
+      /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/DexiNed
+
 accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
@@ -22,4 +25,5 @@ accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_4
   --mixed_precision="fp16" \
   --enable_xformers_memory_efficient_attention \
   --dataloader_num_workers=4 \
-  --report_to="tensorboard"
+  --report_to="tensorboard" \
+  --max_train_samples 100
