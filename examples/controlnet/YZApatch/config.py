@@ -12,11 +12,11 @@ YZApatch配置文件
 
 # DexiNed代码目录路径（包含model.py的目录）
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed"
-DEXINED_CODE_DIR = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed"
+DEXINED_CODE_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/coco2017/DexiNed-master"
 
 # DexiNed模型checkpoint路径
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/checkpoints/BIPED/10/10_model.pth"
-DEXINED_CHECKPOINT = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/checkpoints/BIPED/10/10_model.pth"
+DEXINED_CHECKPOINT = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/coco2017/DexiNed-master/checkpoints/BIPED/10/10_model.pth"
 
 # ============================================================
 # 多数据集配置（支持配置多个数据集及其采样权重）
@@ -27,13 +27,13 @@ DEXINED_CHECKPOINT = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/che
 DATASETS_CONFIG = [
     {
         "name": "mural1",                                          # 数据集名称
-        "path": "D:/Coding/lab/TSA-inpainting/codes/data/mural1", # 数据集路径
+        "path": "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/processed_images/processed_512_images", # 数据集路径
         "weight": 1.0,                                             # 采样权重（默认1.0）
         "recursive_scan": False,                                   # False=单层目录，直接扫描图片
     },
     {
         "name": "artbench",                                            # 数据集名称
-        "path": "D:/Coding/lab/TSA-inpainting/codes/data/artbench",   # 数据集根路径
+        "path": "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/artbench/export_512/train",   # 数据集根路径
         "weight": 1.0,                                                 # 采样权重（默认1.0）
         "recursive_scan": True,                                        # True=递归扫描子目录（两层结构）
     },
@@ -51,11 +51,11 @@ TRAIN_DATA_DIR = "D:/Coding/lab/TSA-inpainting/codes/data/train_images"
 
 # 边缘缓存目录（用于加速训练，首次运行会自动创建）
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/cache/edges"
-EDGE_CACHE_DIR = "D:/Coding/lab/TSA-inpainting/codes/cache/edges"
+EDGE_CACHE_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/temp/edge"
 
 # sketch_util.py所在目录（用于导入）
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint"
-SKETCH_UTIL_DIR = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint"
+SKETCH_UTIL_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/sketch_util.py"
 
 # ============================================================
 # 默认参数配置（一般不需要修改）

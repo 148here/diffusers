@@ -96,14 +96,13 @@ accelerate launch train_controlnet_sdxl.py \
   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
   --use_custom_dataset \
   --enable_edge_cache \
-  --train_data_dir="path/to/your/images" \
   --resolution=512 \
   --learning_rate=1e-5 \
-  --train_batch_size=4 \
+  --train_batch_size=16 \
   --gradient_accumulation_steps=4 \
-  --max_train_steps=10000 \
-  --checkpointing_steps=500 \
-  --output_dir="output/controlnet-sketch-inpaint" \
+  --max_train_steps=60000 \
+  --checkpointing_steps=10000 \
+  --output_dir="/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/1" \
   --proportion_empty_prompts=1.0 \
   --mixed_precision="fp16" \
   --enable_xformers_memory_efficient_attention \
