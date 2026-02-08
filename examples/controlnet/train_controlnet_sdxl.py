@@ -1431,11 +1431,13 @@ def main(args):
 
                 # ControlNet conditioning.
                 controlnet_image = batch["conditioning_pixel_values"].to(dtype=weight_dtype)
+                prompt_embeds = batch["prompt_ids"].to(dtype=weight_dtype)
+                unet_added_cond_kwargs = {k: v.to(dtype=weight_dtype) for k, v in batch["unet_added_conditions"].items()}
                 down_block_res_samples, mid_block_res_sample = controlnet(
                     noisy_latents,
                     timesteps,
-                    encoder_hidden_states=batch["prompt_ids"],
-                    added_cond_kwargs=batch["unet_added_conditions"],
+                    encoder_hidden_states=prompt_embeds,
+                    added_cond_kwargs=unet_added_cond_kwargs,
                     controlnet_cond=controlnet_image,
                     return_dict=False,
                 )
@@ -1476,8 +1478,8 @@ def main(args):
                 model_pred = unet(
                     latent_model_input,
                     timesteps,
-                    encoder_hidden_states=batch["prompt_ids"],
-                    added_cond_kwargs=batch["unet_added_conditions"],
+                    encoder_hidden_states=prompt_embeds,
+                    added_cond_kwargs=unet_added_cond_kwargs,
                     down_block_additional_residuals=[
                         sample.to(dtype=weight_dtype) for sample in down_block_res_samples
                     ],
