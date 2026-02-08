@@ -3,6 +3,9 @@ pip install -e .
 
 conda activate jointdit121
 
+export HF_ENDPOINT=https://hf-mirror.com
+export HUGGINGFACE_HUB_ENDPOINT=https://hf-mirror.com
+
 accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \

@@ -55,7 +55,7 @@ EDGE_CACHE_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/
 
 # sketch_util.py所在目录（用于导入）
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint"
-SKETCH_UTIL_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dataset/sketch_util.py"
+SKETCH_UTIL_DIR = "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT"
 
 # ============================================================
 # 默认参数配置（一般不需要修改）
