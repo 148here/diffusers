@@ -678,6 +678,23 @@ def parse_args(input_args=None):
         action="store_true",
         help="Save edge images to output_dir/edge_debug/ for debugging (edge vs mask computation issues).",
     )
+    parser.add_argument(
+        "--parallel_preload",
+        action="store_true",
+        help="Enable parallel preloading using ProcessPoolExecutor (only with --use_custom_dataset).",
+    )
+    parser.add_argument(
+        "--num_preload_workers",
+        type=int,
+        default=8,
+        help="Number of worker processes for parallel preloading (default: 8).",
+    )
+    parser.add_argument(
+        "--preload_gpu_id",
+        type=int,
+        default=0,
+        help="GPU ID for preprocessing workers (default: 0).",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -787,11 +804,22 @@ def get_train_dataset(args, accelerator):
         
         # 转换为HuggingFace Dataset格式
         max_samples = args.max_train_samples if args.max_train_samples is not None else None
-        dataset = create_huggingface_dataset(
-            custom_dataset,
-            max_samples=max_samples,
-            show_progress=True
-        )
+        if getattr(args, 'parallel_preload', False):
+            from dataset_wrapper import create_huggingface_dataset_parallel
+            dataset = create_huggingface_dataset_parallel(
+                custom_dataset,
+                max_samples=max_samples,
+                show_progress=True,
+                num_workers=getattr(args, 'num_preload_workers', 8),
+                preload_gpu_id=getattr(args, 'preload_gpu_id', 0),
+                seed=args.seed,
+            )
+        else:
+            dataset = create_huggingface_dataset(
+                custom_dataset,
+                max_samples=max_samples,
+                show_progress=True
+            )
         
         logger.info(f"HuggingFace Dataset created with {len(dataset)} samples")
         

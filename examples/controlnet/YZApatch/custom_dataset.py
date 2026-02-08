@@ -465,6 +465,104 @@ class MultiDatasetWrapper(Dataset):
         return stats
 
 
+def extract_dataset_config(dataset) -> dict:
+    """
+    从 InpaintingSketchDataset 或 MultiDatasetWrapper 提取可序列化的配置字典。
+    用于多进程预加载时传递配置，避免 pickle 整个 dataset 对象。
+
+    Args:
+        dataset: InpaintingSketchDataset 或 MultiDatasetWrapper 实例
+
+    Returns:
+        config: 配置字典，可供 create_dataset_from_config 重建
+    """
+    if hasattr(dataset, 'datasets'):
+        # MultiDatasetWrapper: 从已有 datasets 反推 config
+        datasets_config = []
+        total_weight = sum(dataset.weights)
+        for name, ds, w in zip(dataset.dataset_names, dataset.datasets, dataset.weights):
+            single_cfg = extract_dataset_config(ds)
+            datasets_config.append({
+                "name": name,
+                "path": str(single_cfg["image_dir"]),
+                "weight": w * total_weight,  # 反归一化
+                "recursive_scan": single_cfg.get("recursive_scan", True),
+            })
+        return {
+            "type": "multi",
+            "datasets_config": datasets_config,
+            "resolution": dataset.datasets[0].resolution if dataset.datasets else 512,
+            "enable_edge_cache": dataset.datasets[0].enable_edge_cache if dataset.datasets else True,
+            "dexined_checkpoint": dataset.datasets[0].dexined_checkpoint if dataset.datasets else None,
+            "dexined_threshold": dataset.datasets[0].dexined_threshold if dataset.datasets else None,
+            "dexined_device": dataset.datasets[0].dexined_device if dataset.datasets else None,
+            "sketch_params": dict(dataset.datasets[0].sketch_params) if dataset.datasets else None,
+            "mask_params": dict(dataset.datasets[0].mask_params) if dataset.datasets else None,
+            "debug_edge": dataset.datasets[0].debug_edge if dataset.datasets else False,
+            "debug_edge_output_dir": str(dataset.datasets[0].debug_edge_output_dir) if dataset.datasets and dataset.datasets[0].debug_edge_output_dir else None,
+        }
+    else:
+        # InpaintingSketchDataset
+        return {
+            "type": "single",
+            "image_dir": str(dataset.image_dir),
+            "resolution": dataset.resolution,
+            "enable_edge_cache": dataset.enable_edge_cache,
+            "dexined_checkpoint": dataset.dexined_checkpoint,
+            "dexined_threshold": dataset.dexined_threshold,
+            "dexined_device": dataset.dexined_device,
+            "sketch_params": dict(dataset.sketch_params),
+            "mask_params": dict(dataset.mask_params),
+            "recursive_scan": dataset.recursive_scan,
+            "debug_edge": dataset.debug_edge,
+            "debug_edge_output_dir": str(dataset.debug_edge_output_dir) if dataset.debug_edge_output_dir else None,
+        }
+
+
+def create_dataset_from_config(config: dict):
+    """
+    从配置字典创建 InpaintingSketchDataset 或 MultiDatasetWrapper 实例。
+    用于多进程 worker 内重建 dataset，避免跨进程传递大对象。
+
+    Args:
+        config: 由 extract_dataset_config 产生的配置字典
+
+    Returns:
+        dataset: InpaintingSketchDataset 或 MultiDatasetWrapper 实例
+    """
+    cfg = dict(config)
+    dexined_device = cfg.pop("dexined_device", None) or DEXINED_DEVICE
+
+    if cfg.get("type") == "multi":
+        datasets_config = cfg.pop("datasets_config", [])
+        return MultiDatasetWrapper(
+            datasets_config=datasets_config,
+            resolution=cfg.get("resolution", 512),
+            enable_edge_cache=cfg.get("enable_edge_cache", True),
+            dexined_checkpoint=cfg.get("dexined_checkpoint"),
+            dexined_threshold=cfg.get("dexined_threshold"),
+            dexined_device=dexined_device,
+            sketch_params=cfg.get("sketch_params"),
+            mask_params=cfg.get("mask_params"),
+            debug_edge=cfg.get("debug_edge", False),
+            debug_edge_output_dir=cfg.get("debug_edge_output_dir"),
+        )
+    else:
+        return InpaintingSketchDataset(
+            image_dir=cfg["image_dir"],
+            resolution=cfg.get("resolution", 512),
+            enable_edge_cache=cfg.get("enable_edge_cache", True),
+            dexined_checkpoint=cfg.get("dexined_checkpoint"),
+            dexined_threshold=cfg.get("dexined_threshold"),
+            dexined_device=dexined_device,
+            sketch_params=cfg.get("sketch_params"),
+            mask_params=cfg.get("mask_params"),
+            recursive_scan=cfg.get("recursive_scan", True),
+            debug_edge=cfg.get("debug_edge", False),
+            debug_edge_output_dir=cfg.get("debug_edge_output_dir"),
+        )
+
+
 if __name__ == "__main__":
     # 测试代码
     import argparse
