@@ -18,6 +18,33 @@ DEXINED_CODE_DIR = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed"
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/checkpoints/BIPED/10/10_model.pth"
 DEXINED_CHECKPOINT = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/checkpoints/BIPED/10/10_model.pth"
 
+# ============================================================
+# 多数据集配置（支持配置多个数据集及其采样权重）
+# ============================================================
+
+# 数据集配置列表
+# 每个数据集包含：name（名称）, path（路径）, weight（采样权重）, recursive_scan（是否递归扫描）
+DATASETS_CONFIG = [
+    {
+        "name": "mural1",                                          # 数据集名称
+        "path": "D:/Coding/lab/TSA-inpainting/codes/data/mural1", # 数据集路径
+        "weight": 1.0,                                             # 采样权重（默认1.0）
+        "recursive_scan": False,                                   # False=单层目录，直接扫描图片
+    },
+    {
+        "name": "artbench",                                            # 数据集名称
+        "path": "D:/Coding/lab/TSA-inpainting/codes/data/artbench",   # 数据集根路径
+        "weight": 1.0,                                                 # 采样权重（默认1.0）
+        "recursive_scan": True,                                        # True=递归扫描子目录（两层结构）
+    },
+]
+
+# 注意：权重会自动归一化为概率分布
+# 例如：weight [1.0, 1.0] → 各50% 采样概率
+#      weight [2.0, 1.0] → mural1占67%，artbench占33%
+#      weight [1.0, 3.0] → mural1占25%，artbench占75%
+
+# 向后兼容：单数据集模式（如果DATASETS_CONFIG为空，则使用此配置）
 # 训练图片数据目录（支持单目录或包含子目录）
 # 示例: "D:/Coding/lab/TSA-inpainting/codes/data/train_images"
 TRAIN_DATA_DIR = "D:/Coding/lab/TSA-inpainting/codes/data/train_images"

@@ -21,7 +21,7 @@ def create_huggingface_dataset(
     将自定义PyTorch Dataset转换为HuggingFace Dataset
     
     Args:
-        custom_dataset: InpaintingSketchDataset实例
+        custom_dataset: InpaintingSketchDataset或MultiDatasetWrapper实例
         max_samples: 最大样本数（None则使用全部）
         show_progress: 是否显示进度条
     
@@ -33,6 +33,17 @@ def create_huggingface_dataset(
     - 如果数据集很大，建议使用max_samples限制数量
     - 或者考虑使用HF的IterableDataset（流式加载）
     """
+    # 检查是否是MultiDatasetWrapper
+    if hasattr(custom_dataset, 'datasets'):
+        # 多数据集模式
+        print(f"[DatasetWrapper] Multi-dataset mode: {len(custom_dataset.datasets)} datasets")
+        for i, (name, ds, w) in enumerate(zip(
+            custom_dataset.dataset_names,
+            custom_dataset.datasets,
+            custom_dataset.weights
+        )):
+            print(f"  Dataset '{name}': {len(ds)} images, weight={w:.2%}")
+    
     # 确定样本数量
     num_samples = len(custom_dataset)
     if max_samples is not None:

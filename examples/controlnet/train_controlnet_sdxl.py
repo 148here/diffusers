@@ -713,17 +713,56 @@ def get_train_dataset(args, accelerator):
         logger.info("Using YZApatch custom dataset for real-time sketch generation")
         logger.info("="*70)
         
-        if args.train_data_dir is None:
-            raise ValueError("--train_data_dir must be specified when using --use_custom_dataset")
+        # 导入必要的模块
+        try:
+            from YZApatch.config import DATASETS_CONFIG
+            from YZApatch.custom_dataset import MultiDatasetWrapper
+        except ImportError as e:
+            logger.error(f"Failed to import YZApatch modules: {e}")
+            raise
         
-        # 创建自定义数据集
-        custom_dataset = InpaintingSketchDataset(
-            image_dir=args.train_data_dir,
-            resolution=args.resolution,
-            enable_edge_cache=getattr(args, 'enable_edge_cache', False),
-        )
+        # 检查是否使用多数据集配置
+        use_multi_dataset = DATASETS_CONFIG and len(DATASETS_CONFIG) > 1
         
-        logger.info(f"Custom dataset created with {len(custom_dataset)} images")
+        if use_multi_dataset:
+            # ============================================================
+            # 多数据集模式
+            # ============================================================
+            logger.info(f"Multi-dataset mode: {len(DATASETS_CONFIG)} datasets configured")
+            
+            for i, ds_config in enumerate(DATASETS_CONFIG):
+                logger.info(f"  Dataset {i+1}: {ds_config.get('name', 'unnamed')}")
+                logger.info(f"    Path: {ds_config.get('path', 'N/A')}")
+                logger.info(f"    Weight: {ds_config.get('weight', 1.0)}")
+                logger.info(f"    Recursive: {ds_config.get('recursive_scan', True)}")
+            
+            # 创建多数据集包装器
+            custom_dataset = MultiDatasetWrapper(
+                datasets_config=DATASETS_CONFIG,
+                resolution=args.resolution,
+                enable_edge_cache=getattr(args, 'enable_edge_cache', False),
+            )
+            
+            logger.info(f"Multi-dataset wrapper created with {len(custom_dataset)} total samples")
+            
+        else:
+            # ============================================================
+            # 单数据集模式（向后兼容）
+            # ============================================================
+            if args.train_data_dir is None:
+                raise ValueError("--train_data_dir must be specified when using single dataset mode")
+            
+            logger.info("Single dataset mode")
+            logger.info(f"  Path: {args.train_data_dir}")
+            
+            # 创建单个数据集
+            custom_dataset = InpaintingSketchDataset(
+                image_dir=args.train_data_dir,
+                resolution=args.resolution,
+                enable_edge_cache=getattr(args, 'enable_edge_cache', False),
+            )
+            
+            logger.info(f"Custom dataset created with {len(custom_dataset)} images")
         
         # 转换为HuggingFace Dataset格式
         max_samples = args.max_train_samples if args.max_train_samples is not None else None

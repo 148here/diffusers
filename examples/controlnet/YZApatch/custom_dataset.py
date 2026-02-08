@@ -286,6 +286,161 @@ class InpaintingSketchDataset(Dataset):
             }
 
 
+class MultiDatasetWrapper(Dataset):
+    """
+    多数据集包装器
+    
+    功能：
+    - 加载多个数据集（每个数据集有独立配置）
+    - 按权重动态采样（per-batch随机选择）
+    - 统一返回格式
+    
+    使用场景：
+    - 混合多个数据源训练
+    - 控制各数据源的采样比例
+    - 支持不同的目录结构（单层/递归）
+    """
+    
+    def __init__(
+        self,
+        datasets_config: List[dict],
+        resolution: int = 512,
+        enable_edge_cache: bool = True,
+        dexined_checkpoint: Optional[str] = None,
+        dexined_threshold: Optional[int] = None,
+        dexined_device: Optional[str] = None,
+        sketch_params: Optional[dict] = None,
+        mask_params: Optional[dict] = None,
+    ):
+        """
+        初始化多数据集包装器
+        
+        Args:
+            datasets_config: 数据集配置列表，每个配置包含：
+                - name: 数据集名称
+                - path: 数据集路径
+                - weight: 采样权重（默认1.0）
+                - recursive_scan: 是否递归扫描（默认True）
+            resolution: 图像分辨率
+            enable_edge_cache: 是否启用边缘缓存
+            其他参数同InpaintingSketchDataset
+        """
+        if not datasets_config or len(datasets_config) == 0:
+            raise ValueError("datasets_config must contain at least one dataset")
+        
+        self.datasets = []
+        self.weights = []
+        self.dataset_names = []
+        
+        print(f"[MultiDatasetWrapper] Initializing {len(datasets_config)} datasets...")
+        
+        # 加载所有数据集
+        for i, config in enumerate(datasets_config):
+            name = config.get("name", f"dataset_{i}")
+            path = config.get("path")
+            weight = config.get("weight", 1.0)
+            recursive_scan = config.get("recursive_scan", True)
+            
+            if not path:
+                raise ValueError(f"Dataset '{name}' missing required 'path' field")
+            
+            print(f"\n[MultiDatasetWrapper] Loading dataset '{name}':")
+            print(f"  Path: {path}")
+            print(f"  Weight: {weight}")
+            print(f"  Recursive scan: {recursive_scan}")
+            
+            # 创建单个数据集
+            dataset = InpaintingSketchDataset(
+                image_dir=path,
+                resolution=resolution,
+                enable_edge_cache=enable_edge_cache,
+                dexined_checkpoint=dexined_checkpoint,
+                dexined_threshold=dexined_threshold,
+                dexined_device=dexined_device,
+                sketch_params=sketch_params,
+                mask_params=mask_params,
+                recursive_scan=recursive_scan,
+            )
+            
+            self.datasets.append(dataset)
+            self.weights.append(weight)
+            self.dataset_names.append(name)
+            
+            print(f"  → Loaded {len(dataset)} images")
+        
+        # 归一化权重为概率分布
+        total_weight = sum(self.weights)
+        self.weights = [w / total_weight for w in self.weights]
+        
+        # 计算总样本数（使用最大数据集的大小）
+        self.total_samples = max(len(d) for d in self.datasets)
+        
+        print(f"\n[MultiDatasetWrapper] Summary:")
+        print(f"  Total datasets: {len(self.datasets)}")
+        print(f"  Total samples (max): {self.total_samples}")
+        print(f"  Sampling weights:")
+        for name, weight in zip(self.dataset_names, self.weights):
+            print(f"    - {name}: {weight:.2%}")
+    
+    def __len__(self) -> int:
+        """返回数据集大小（使用最大数据集的大小）"""
+        return self.total_samples
+    
+    def __getitem__(self, idx: int) -> dict:
+        """
+        获取单个样本（按权重随机选择数据集）
+        
+        Args:
+            idx: 样本索引
+        
+        Returns:
+            sample: 数据样本字典
+        """
+        # 按权重随机选择数据集
+        dataset_idx = np.random.choice(
+            len(self.datasets),
+            p=self.weights
+        )
+        
+        # 从选中的数据集获取样本
+        selected_dataset = self.datasets[dataset_idx]
+        
+        # 使用取模确保索引在范围内
+        sample_idx = idx % len(selected_dataset)
+        
+        # 获取样本
+        sample = selected_dataset[sample_idx]
+        
+        # 可选：添加数据集来源标记（用于调试）
+        # sample['_source_dataset'] = self.dataset_names[dataset_idx]
+        
+        return sample
+    
+    def get_dataset_stats(self) -> dict:
+        """
+        获取所有数据集的统计信息
+        
+        Returns:
+            stats: 统计信息字典
+        """
+        stats = {
+            "num_datasets": len(self.datasets),
+            "total_samples": self.total_samples,
+            "datasets": []
+        }
+        
+        for name, dataset, weight in zip(self.dataset_names, self.datasets, self.weights):
+            dataset_info = {
+                "name": name,
+                "num_images": len(dataset),
+                "sampling_weight": weight,
+                "sampling_percentage": f"{weight:.2%}"
+            }
+            stats["datasets"].append(dataset_info)
+        
+        return stats
+
+
 if __name__ == "__main__":
     # 测试代码
     import argparse

@@ -30,7 +30,7 @@ __version__ = "1.0.0"
 __author__ = "YZApatch"
 
 # 导入主要组件
-from .custom_dataset import InpaintingSketchDataset
+from .custom_dataset import InpaintingSketchDataset, MultiDatasetWrapper
 from .dataset_wrapper import create_huggingface_dataset, create_lazy_huggingface_dataset
 from .mask_generator import ComplexMaskGenerator, generate_complex_mask
 from .edge_cache import EdgeCacheManager, get_edge_cache_manager
@@ -42,6 +42,7 @@ from . import config
 __all__ = [
     # 主要类
     'InpaintingSketchDataset',
+    'MultiDatasetWrapper',
     'ComplexMaskGenerator',
     'EdgeCacheManager',
     

@@ -14,7 +14,35 @@ YZApatch是一个用于ControlNet训练的自定义数据集模块，提供以�
 
 ### 1. 配置路径
 
-编辑 `YZApatch/config.py` 文件顶部的路径配置：
+#### 方式A：多数据集模式（推荐）
+
+编辑 `YZApatch/config.py` 文件中的 `DATASETS_CONFIG` 配置：
+
+```python
+DATASETS_CONFIG = [
+    {
+        "name": "mural1",                                          # 数据集名称
+        "path": "D:/Coding/lab/TSA-inpainting/codes/data/mural1", # 数据集路径
+        "weight": 1.0,                                             # 采样权重
+        "recursive_scan": False,                                   # False=单层目录
+    },
+    {
+        "name": "artbench",                                            # 数据集名称
+        "path": "D:/Coding/lab/TSA-inpainting/codes/data/artbench",   # 数据集根路径
+        "weight": 1.0,                                                 # 采样权重
+        "recursive_scan": True,                                        # True=递归扫描子目录
+    },
+]
+```
+
+**权重说明**：
+- `weight: [1.0, 1.0]` → 各占50%采样概率
+- `weight: [2.0, 1.0]` → mural1占67%，artbench占33%
+- `weight: [1.0, 3.0]` → mural1占25%，artbench占75%
+
+#### 方式B：单数据集模式（向后兼容）
+
+如果只使用一个数据集，可以保持原来的配置方式：
 
 ```python
 # DexiNed代码目录路径（包含model.py的目录）
@@ -23,7 +51,7 @@ DEXINED_CODE_DIR = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed"
 # DexiNed模型checkpoint路径
 DEXINED_CHECKPOINT = "D:/Coding/lab/TSA-inpainting/codes/TSA-inpaint/DexiNed/checkpoints/BIPED/10/10_model.pth"
 
-# 训练图片数据目录（支持单目录或包含子目录）
+# 训练图片数据目录
 TRAIN_DATA_DIR = "D:/Coding/lab/TSA-inpainting/codes/data/train_images"
 
 # 边缘缓存目录（用于加速训练）
@@ -158,7 +186,38 @@ MASK_PARAMS = {
 - **形态学操作**：增加边缘不规则性
 - **基于边缘密度**：优先在边缘密集区域放置mask
 
-### 3. 数据流程
+### 3. 多数据集混合采样（新功能）
+
+支持配置多个数据集，每个数据集有独立的：
+
+- **路径配置**：支持不同的目录结构
+- **采样权重**：控制各数据集的采样比例
+- **递归扫描**：单层目录或递归子目录
+
+**采样策略**：
+- Per-batch动态混合：每个batch按权重随机选择数据集
+- 自动权重归一化：权重会自动转换为概率分布
+- 充分混合：确保训练数据多样性
+
+**配置示例**：
+```python
+DATASETS_CONFIG = [
+    {
+        "name": "mural1",
+        "path": "D:/path/to/mural1",
+        "weight": 1.0,              # 50%采样概率
+        "recursive_scan": False,    # 单层目录
+    },
+    {
+        "name": "artbench",
+        "path": "D:/path/to/artbench",
+        "weight": 1.0,              # 50%采样概率
+        "recursive_scan": True,     # 两层目录结构
+    },
+]
+```
+
+### 4. 数据流程
 
 ```
 原图(512x512) 
@@ -269,7 +328,52 @@ SKETCH_PARAMS = {
 
 不添加 `--enable_edge_cache` 参数即可，每次都会实时提取边缘。
 
-### Q7: DexiNed模型加载失败怎么办？
+### Q7: 如何禁用边缘缓存？
+
+不添加 `--enable_edge_cache` 参数即可，每次都会实时提取边缘。
+
+### Q8: 如何使用多个数据集训练？
+
+编辑 `config.py` 中的 `DATASETS_CONFIG`：
+
+```python
+DATASETS_CONFIG = [
+    {
+        "name": "mural1",
+        "path": "D:/path/to/mural1",
+        "weight": 1.0,              # 采样权重
+        "recursive_scan": False,    # False=单层目录
+    },
+    {
+        "name": "artbench",
+        "path": "D:/path/to/artbench",
+        "weight": 1.0,
+        "recursive_scan": True,     # True=递归扫描子目录
+    },
+]
+```
+
+权重控制各数据集的采样比例：
+- `[1.0, 1.0]` → 各占50%
+- `[2.0, 1.0]` → 第一个占67%，第二个占33%
+- `[1.0, 3.0]` → 第一个占25%，第二个占75%
+
+### Q9: 如何测试多数据集配置是否正确？
+
+运行测试脚本：
+
+```bash
+cd YZApatch
+python test_multi_dataset.py
+```
+
+这会验证：
+- 配置是否正确
+- 数据集是否能正常加载
+- 采样权重是否符合预期
+- 样本是否能正常生成
+
+### Q10: DexiNed模型加载失败怎么办？
 
 检查配置：
 
