@@ -1449,14 +1449,15 @@ def main(args):
                             "or ensure your dataset has a 'mask' column (white=inpaint, black=preserve)."
                         )
                     latent_h, latent_w = latents.shape[2], latents.shape[3]
-
-                    # Resize mask to latent resolution (B, 1, H, W) -> (B, 1, H//8, W//8)
                     mask = batch["mask_values"].to(device=latents.device, dtype=weight_dtype)
-                    mask = F.interpolate(mask, size=(latent_h, latent_w), mode="nearest")
 
-                    # masked_image = pixel_values * (1 - mask): zero out inpaint regions
+                    # Resize mask to latent resolution (B, 1, H, W) -> (B, 1, H//8, W//8) for concat
+                    mask_latent = F.interpolate(mask, size=(latent_h, latent_w), mode="nearest")
+
+                    # masked_image = pixel_values * (1 - mask): zero out inpaint regions (need mask at pixel resolution)
                     pixel_values_batch = batch["pixel_values"].to(device=latents.device, dtype=weight_dtype)
-                    preserve_mask = (1 - mask).expand_as(pixel_values_batch)
+                    mask_pixel = F.interpolate(mask, size=(pixel_values_batch.shape[2], pixel_values_batch.shape[3]), mode="nearest")
+                    preserve_mask = (1 - mask_pixel).expand_as(pixel_values_batch)
                     masked_image = pixel_values_batch * preserve_mask
 
                     # VAE encode masked image -> masked_image_latents (4 channels)
@@ -1465,8 +1466,8 @@ def main(args):
                         masked_image_latents = masked_image_latents * vae.config.scaling_factor
                     masked_image_latents = masked_image_latents.to(dtype=weight_dtype)
 
-                    # Concat: [noisy_latents, mask, masked_image_latents] = 4+1+4 = 9 channels
-                    latent_model_input = torch.cat([noisy_latents, mask, masked_image_latents], dim=1)
+                    # Concat: [noisy_latents, mask_latent, masked_image_latents] = 4+1+4 = 9 channels
+                    latent_model_input = torch.cat([noisy_latents, mask_latent, masked_image_latents], dim=1)
                 else:
                     latent_model_input = noisy_latents
 
