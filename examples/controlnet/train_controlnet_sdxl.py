@@ -579,6 +579,12 @@ def parse_args(input_args=None):
         help="The column of the dataset containing the controlnet conditioning image.",
     )
     parser.add_argument(
+        "--mask_column",
+        type=str,
+        default="mask",
+        help="The column of the dataset containing the inpainting mask (white=inpaint, black=preserve). Required for inpainting models.",
+    )
+    parser.add_argument(
         "--caption_column",
         type=str,
         default="text",
@@ -937,6 +943,22 @@ def prepare_train_dataset(dataset, accelerator):
         ]
     )
 
+    # Mask transforms for inpainting: resize, grayscale, binarize (white=inpaint=1, black=preserve=0)
+    mask_column = getattr(args, "mask_column", "mask")
+    has_mask_column = mask_column in dataset.column_names
+
+    mask_transforms = None
+    if has_mask_column:
+        mask_transforms = transforms.Compose(
+            [
+                transforms.Resize(args.resolution, interpolation=interpolation_mode),
+                transforms.CenterCrop(args.resolution),
+                transforms.Grayscale(num_output_channels=1),
+                transforms.ToTensor(),
+                transforms.Lambda(lambda x: (x >= 0.5).float()),  # binarize: white(>=0.5)->1, black(<0.5)->0
+            ]
+        )
+
     def preprocess_train(examples):
         images = [image.convert("RGB") for image in examples[args.image_column]]
         images = [image_transforms(image) for image in images]
@@ -946,6 +968,10 @@ def prepare_train_dataset(dataset, accelerator):
 
         examples["pixel_values"] = images
         examples["conditioning_pixel_values"] = conditioning_images
+
+        if has_mask_column and mask_transforms is not None:
+            masks = [mask_transforms(image.convert("L") if hasattr(image, "convert") else image) for image in examples[mask_column]]
+            examples["mask_values"] = masks  # shape: (1, H, W) each, 1=inpaint, 0=preserve
 
         return examples
 
@@ -967,12 +993,17 @@ def collate_fn(examples):
     add_text_embeds = torch.stack([torch.tensor(example["text_embeds"]) for example in examples])
     add_time_ids = torch.stack([torch.tensor(example["time_ids"]) for example in examples])
 
-    return {
+    result = {
         "pixel_values": pixel_values,
         "conditioning_pixel_values": conditioning_pixel_values,
         "prompt_ids": prompt_ids,
         "unet_added_conditions": {"text_embeds": add_text_embeds, "time_ids": add_time_ids},
     }
+    if "mask_values" in examples[0]:
+        mask_values = torch.stack([example["mask_values"] for example in examples])
+        mask_values = mask_values.to(memory_format=torch.contiguous_format).float()
+        result["mask_values"] = mask_values
+    return result
 
 
 def main(args):
@@ -1409,9 +1440,39 @@ def main(args):
                     return_dict=False,
                 )
 
+                # Inpainting model (9 channels): concat noisy_latents + mask + masked_image_latents
+                num_channels_unet = unet.config.in_channels
+                if num_channels_unet == 9:
+                    if "mask_values" not in batch:
+                        raise ValueError(
+                            "Inpainting model (9 channels) requires mask. Use --use_custom_dataset with YZApatch "
+                            "or ensure your dataset has a 'mask' column (white=inpaint, black=preserve)."
+                        )
+                    latent_h, latent_w = latents.shape[2], latents.shape[3]
+
+                    # Resize mask to latent resolution (B, 1, H, W) -> (B, 1, H//8, W//8)
+                    mask = batch["mask_values"].to(device=latents.device, dtype=weight_dtype)
+                    mask = F.interpolate(mask, size=(latent_h, latent_w), mode="nearest")
+
+                    # masked_image = pixel_values * (1 - mask): zero out inpaint regions
+                    pixel_values_batch = batch["pixel_values"].to(device=latents.device, dtype=weight_dtype)
+                    preserve_mask = (1 - mask).expand_as(pixel_values_batch)
+                    masked_image = pixel_values_batch * preserve_mask
+
+                    # VAE encode masked image -> masked_image_latents (4 channels)
+                    with torch.no_grad():
+                        masked_image_latents = vae.encode(masked_image).latent_dist.sample()
+                        masked_image_latents = masked_image_latents * vae.config.scaling_factor
+                    masked_image_latents = masked_image_latents.to(dtype=weight_dtype)
+
+                    # Concat: [noisy_latents, mask, masked_image_latents] = 4+1+4 = 9 channels
+                    latent_model_input = torch.cat([noisy_latents, mask, masked_image_latents], dim=1)
+                else:
+                    latent_model_input = noisy_latents
+
                 # Predict the noise residual
                 model_pred = unet(
-                    noisy_latents,
+                    latent_model_input,
                     timesteps,
                     encoder_hidden_states=batch["prompt_ids"],
                     added_cond_kwargs=batch["unet_added_conditions"],
