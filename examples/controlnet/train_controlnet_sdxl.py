@@ -68,6 +68,46 @@ logger = get_logger(__name__)
 if is_torch_npu_available():
     torch.npu.config.allow_internal_format = False
 
+# ============================================================================
+# YZApatch: 自定义数据集支持（实时sketch生成 + 复杂mask生成）
+# ============================================================================
+import sys
+yzapatch_dir = Path(__file__).parent / "YZApatch"
+if yzapatch_dir.exists():
+    sys.path.insert(0, str(yzapatch_dir))
+    try:
+        from custom_dataset import InpaintingSketchDataset
+        from dataset_wrapper import create_huggingface_dataset
+        USE_CUSTOM_DATASET = True
+        logger.info("YZApatch custom dataset module loaded successfully")
+    except ImportError as e:
+        USE_CUSTOM_DATASET = False
+        logger.warning(f"YZApatch module found but failed to import: {e}")
+        logger.warning("Falling back to standard dataset loading")
+else:
+    USE_CUSTOM_DATASET = False
+    logger.info("YZApatch not found, using standard dataset loading")
+# ============================================================================
+
+# ============================================================
+# YZApatch: 自定义数据集支持（实时sketch生成 + 复杂mask）
+# ============================================================
+try:
+    yzapatch_dir = Path(__file__).parent / "YZApatch"
+    if yzapatch_dir.exists():
+        import sys
+        sys.path.insert(0, str(yzapatch_dir))
+        from custom_dataset import InpaintingSketchDataset
+        from dataset_wrapper import create_huggingface_dataset
+        USE_CUSTOM_DATASET = True
+        logger.info("YZApatch module loaded successfully")
+    else:
+        USE_CUSTOM_DATASET = False
+        logger.warning("YZApatch directory not found, custom dataset features disabled")
+except Exception as e:
+    USE_CUSTOM_DATASET = False
+    logger.warning(f"Failed to import YZApatch: {e}. Custom dataset features disabled.")
+
 
 def log_validation(vae, unet, controlnet, args, accelerator, weight_dtype, step, is_final_validation=False):
     logger.info("Running validation... ")
@@ -615,6 +655,17 @@ def parse_args(input_args=None):
         ],
         help="The image interpolation method to use for resizing images.",
     )
+    # YZApatch: 自定义数据集参数
+    parser.add_argument(
+        "--use_custom_dataset",
+        action="store_true",
+        help="Use YZApatch custom dataset for real-time sketch generation and complex mask generation.",
+    )
+    parser.add_argument(
+        "--enable_edge_cache",
+        action="store_true",
+        help="Enable edge extraction caching to speed up training (only works with --use_custom_dataset).",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -654,6 +705,50 @@ def parse_args(input_args=None):
 
 
 def get_train_dataset(args, accelerator):
+    # ========================================================================
+    # YZApatch: 如果启用自定义数据集，使用实时sketch生成pipeline
+    # ========================================================================
+    if USE_CUSTOM_DATASET and getattr(args, 'use_custom_dataset', False):
+        logger.info("="*70)
+        logger.info("Using YZApatch custom dataset for real-time sketch generation")
+        logger.info("="*70)
+        
+        if args.train_data_dir is None:
+            raise ValueError("--train_data_dir must be specified when using --use_custom_dataset")
+        
+        # 创建自定义数据集
+        custom_dataset = InpaintingSketchDataset(
+            image_dir=args.train_data_dir,
+            resolution=args.resolution,
+            enable_edge_cache=getattr(args, 'enable_edge_cache', False),
+        )
+        
+        logger.info(f"Custom dataset created with {len(custom_dataset)} images")
+        
+        # 转换为HuggingFace Dataset格式
+        max_samples = args.max_train_samples if args.max_train_samples is not None else None
+        dataset = create_huggingface_dataset(
+            custom_dataset,
+            max_samples=max_samples,
+            show_progress=True
+        )
+        
+        logger.info(f"HuggingFace Dataset created with {len(dataset)} samples")
+        
+        # 包装为带有'train' split的DatasetDict格式
+        from datasets import DatasetDict
+        dataset_dict = DatasetDict({'train': dataset})
+        
+        # 应用shuffle
+        with accelerator.main_process_first():
+            train_dataset = dataset_dict["train"].shuffle(seed=args.seed)
+            logger.info(f"Dataset shuffled with seed={args.seed}")
+        
+        return train_dataset
+    
+    # ========================================================================
+    # 原有代码：标准数据集加载方式
+    # ========================================================================
     # Get the datasets: you can either provide your own training and evaluation files (see below)
     # or specify a Dataset from the hub (the dataset will be downloaded automatically from the datasets Hub).
 
