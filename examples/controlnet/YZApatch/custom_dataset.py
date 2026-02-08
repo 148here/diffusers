@@ -80,6 +80,8 @@ class InpaintingSketchDataset(Dataset):
         sketch_params: Optional[dict] = None,
         mask_params: Optional[dict] = None,
         recursive_scan: Optional[bool] = None,
+        debug_edge: bool = False,
+        debug_edge_output_dir: Optional[str] = None,
     ):
         """
         初始化数据集
@@ -94,6 +96,8 @@ class InpaintingSketchDataset(Dataset):
             sketch_params: sketch生成参数（None则使用config中的默认值）
             mask_params: mask生成参数（None则使用config中的默认值）
             recursive_scan: 是否递归扫描子目录（None则使用config中的默认值）
+            debug_edge: 是否保存edge图到输出目录（用于排查edge/mask问题）
+            debug_edge_output_dir: edge debug输出目录（debug_edge=True时有效）
         """
         self.image_dir = Path(image_dir)
         self.resolution = resolution
@@ -106,6 +110,8 @@ class InpaintingSketchDataset(Dataset):
         self.sketch_params = sketch_params or SKETCH_PARAMS
         self.mask_params = mask_params or MASK_PARAMS
         self.recursive_scan = recursive_scan if recursive_scan is not None else RECURSIVE_SCAN
+        self.debug_edge = debug_edge
+        self.debug_edge_output_dir = Path(debug_edge_output_dir) if debug_edge_output_dir else None
         
         # 验证目录存在
         if not self.image_dir.exists():
@@ -234,6 +240,13 @@ class InpaintingSketchDataset(Dataset):
         # 4. 提取边缘图（使用缓存）
         edge_image = self._extract_edge_with_cache(image_path, image_np)
         
+        # 4.1 debug: 保存edge图供排查（判断是edge问题还是后续mask计算问题）
+        if self.debug_edge and self.debug_edge_output_dir:
+            out_dir = self.debug_edge_output_dir
+            out_dir.mkdir(parents=True, exist_ok=True)
+            fname = f"edge_debug_{idx}_{image_path.stem}.png"
+            Image.fromarray(edge_image).save(out_dir / fname)
+        
         # 5. 生成sketch（使用随机种子确保每次不同）
         # 使用idx和当前epoch作为seed的一部分，确保不同epoch产生不同结果
         seed = np.random.randint(0, 2**31 - 1)
@@ -311,6 +324,8 @@ class MultiDatasetWrapper(Dataset):
         dexined_device: Optional[str] = None,
         sketch_params: Optional[dict] = None,
         mask_params: Optional[dict] = None,
+        debug_edge: bool = False,
+        debug_edge_output_dir: Optional[str] = None,
     ):
         """
         初始化多数据集包装器
@@ -323,6 +338,8 @@ class MultiDatasetWrapper(Dataset):
                 - recursive_scan: 是否递归扫描（默认True）
             resolution: 图像分辨率
             enable_edge_cache: 是否启用边缘缓存
+            debug_edge: 是否保存edge图到输出目录
+            debug_edge_output_dir: edge debug输出目录
             其他参数同InpaintingSketchDataset
         """
         if not datasets_config or len(datasets_config) == 0:
@@ -360,6 +377,8 @@ class MultiDatasetWrapper(Dataset):
                 sketch_params=sketch_params,
                 mask_params=mask_params,
                 recursive_scan=recursive_scan,
+                debug_edge=debug_edge,
+                debug_edge_output_dir=debug_edge_output_dir,
             )
             
             self.datasets.append(dataset)

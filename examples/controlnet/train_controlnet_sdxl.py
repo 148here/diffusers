@@ -667,6 +667,11 @@ def parse_args(input_args=None):
         action="store_true",
         help="Enable edge extraction caching to speed up training (only works with --use_custom_dataset).",
     )
+    parser.add_argument(
+        "--debug_edge",
+        action="store_true",
+        help="Save edge images to output_dir/edge_debug/ for debugging (edge vs mask computation issues).",
+    )
 
     if input_args is not None:
         args = parser.parse_args(input_args)
@@ -739,10 +744,14 @@ def get_train_dataset(args, accelerator):
                 logger.info(f"    Recursive: {ds_config.get('recursive_scan', True)}")
             
             # 创建多数据集包装器
+            debug_edge = getattr(args, 'debug_edge', False)
+            debug_edge_output_dir = os.path.join(args.output_dir, "edge_debug") if (debug_edge and args.output_dir) else None
             custom_dataset = MultiDatasetWrapper(
                 datasets_config=DATASETS_CONFIG,
                 resolution=args.resolution,
                 enable_edge_cache=getattr(args, 'enable_edge_cache', False),
+                debug_edge=debug_edge,
+                debug_edge_output_dir=debug_edge_output_dir,
             )
             
             logger.info(f"Multi-dataset wrapper created with {len(custom_dataset)} total samples")
@@ -758,10 +767,14 @@ def get_train_dataset(args, accelerator):
             logger.info(f"  Path: {args.train_data_dir}")
             
             # 创建单个数据集
+            debug_edge = getattr(args, 'debug_edge', False)
+            debug_edge_output_dir = os.path.join(args.output_dir, "edge_debug") if (debug_edge and args.output_dir) else None
             custom_dataset = InpaintingSketchDataset(
                 image_dir=args.train_data_dir,
                 resolution=args.resolution,
                 enable_edge_cache=getattr(args, 'enable_edge_cache', False),
+                debug_edge=debug_edge,
+                debug_edge_output_dir=debug_edge_output_dir,
             )
             
             logger.info(f"Custom dataset created with {len(custom_dataset)} images")
