@@ -9,6 +9,7 @@
 
 import cv2
 import numpy as np
+from pathlib import Path
 from typing import Tuple, Dict, Optional
 
 
@@ -51,6 +52,9 @@ class ComplexMaskGenerator:
         self.params = self.default_params.copy()
         if params is not None:
             self.params.update(params)
+        # debug模式下输出详细统计（由debug_edge触发）
+        self.debug_output_dir = self.params.pop("_debug_output_dir", None)
+        self._debug_counter = 0
     
     def compute_edge_density(self, edge_image: np.ndarray, kernel_size: int = 31) -> np.ndarray:
         """
@@ -75,11 +79,13 @@ class ComplexMaskGenerator:
         # 局部窗口求平均（卷积）
         kernel = np.ones((kernel_size, kernel_size), np.float32) / (kernel_size ** 2)
         edge_density = cv2.filter2D(edge_gray.astype(np.float32) / 255.0, -1, kernel)
-        
+        # 裁剪到[0,1]，避免浮点误差产生负值导致sqrt NaN
+        edge_density = np.clip(edge_density, 0.0, 1.0)
         return edge_density
     
     def sample_center_from_density(self, edge_density: np.ndarray, 
-                                   weight: float, threshold: float) -> Tuple[int, int]:
+                                   weight: float, threshold: float,
+                                   debug_log_prefix: Optional[str] = None) -> Tuple[int, int]:
         """
         根据边缘密度采样mask中心点
         
@@ -87,28 +93,59 @@ class ComplexMaskGenerator:
             edge_density: 边缘密度图 [H,W]
             weight: 密度权重（>1则优先选择密集区域）
             threshold: 密度阈值
+            debug_log_prefix: debug模式下日志前缀（用于输出详细统计）
         
         Returns:
             (cy, cx): 中心点坐标
         """
         h, w = edge_density.shape
+        do_debug = self.debug_output_dir and debug_log_prefix is not None
+        
+        # 裁剪到[0,1]，避免负值导致sqrt NaN
+        edge_density = np.clip(edge_density, 0.0, 1.0)
+        
+        # weight必须为正，否则1/weight会异常
+        weight = max(weight, 1e-6) if weight <= 0 else weight
         
         # 构建概率图
         prob_map = np.where(
             edge_density > threshold,
-            edge_density ** weight,  # 高密度区域增强
-            edge_density ** (1.0 / weight)  # 低密度区域减弱
+            edge_density ** weight,
+            edge_density ** (1.0 / weight)
         )
+        prob_map = np.nan_to_num(prob_map, nan=0.0, posinf=0.0, neginf=0.0)
         
-        # 归一化
-        prob_map = prob_map / (prob_map.sum() + 1e-8)
+        prob_sum = float(prob_map.sum())
+        if prob_sum < 1e-10 or not np.isfinite(prob_sum):
+            # 全零时退化为均匀分布
+            flat_prob = np.ones(h * w, dtype=np.float64) / (h * w)
+            if do_debug:
+                self._write_debug_log(debug_log_prefix, edge_density, prob_map, prob_sum, True)
+        else:
+            flat_prob = (prob_map.flatten()).astype(np.float64) / prob_sum
+            if do_debug:
+                self._write_debug_log(debug_log_prefix, edge_density, prob_map, prob_sum, False)
         
-        # 采样
-        flat_prob = prob_map.flatten()
         idx = np.random.choice(len(flat_prob), p=flat_prob)
         cy, cx = divmod(idx, w)
-        
         return int(cy), int(cx)
+    
+    def _write_debug_log(self, prefix: str, edge_density: np.ndarray, 
+                         prob_map: np.ndarray, prob_sum: float, used_uniform: bool) -> None:
+        """输出详细debug统计到文件"""
+        out_dir = Path(self.debug_output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+        lines = [
+            f"[MaskDebug] {prefix}",
+            f"  edge_density: min={edge_density.min():.6f} max={edge_density.max():.6f} "
+            f"mean={edge_density.mean():.6f} neg_count={(edge_density < 0).sum()} nan_count={np.isnan(edge_density).sum()}",
+            f"  prob_map: min={prob_map.min():.6f} max={prob_map.max():.6f} sum={prob_sum:.6f} "
+            f"nan_count={np.isnan(prob_map).sum()}",
+            f"  used_uniform_fallback={used_uniform}",
+        ]
+        msg = "\n".join(lines)
+        (out_dir / f"{prefix}.txt").write_text(msg, encoding="utf-8")
+        print(msg)
     
     def draw_rotated_rectangle(self, mask: np.ndarray, center: Tuple[int, int], 
                                width: int, height: int, angle: float) -> None:
@@ -142,13 +179,15 @@ class ComplexMaskGenerator:
         """
         cv2.ellipse(mask, center, (width // 2, height // 2), angle, 0, 360, 255, -1)
     
-    def add_brush_strokes(self, mask: np.ndarray, edge_density: np.ndarray) -> None:
+    def add_brush_strokes(self, mask: np.ndarray, edge_density: np.ndarray,
+                          debug_log_prefix: Optional[str] = None) -> None:
         """
         添加随机笔刷描边，模拟真实涂抹效果
         
         Args:
             mask: mask数组 [H,W]，会就地修改
             edge_density: 边缘密度图 [H,W]
+            debug_log_prefix: debug模式下日志前缀
         """
         h, w = mask.shape
         params = self.params
@@ -161,7 +200,8 @@ class ComplexMaskGenerator:
         cy, cx = self.sample_center_from_density(
             edge_density,
             params["edge_density_weight"],
-            params["edge_density_threshold"]
+            params["edge_density_threshold"],
+            debug_log_prefix=debug_log_prefix
         )
         
         # 生成随机笔画路径
@@ -221,9 +261,20 @@ class ComplexMaskGenerator:
         
         h, w = edge_image.shape[:2]
         params = self.params
+        self._debug_counter += 1
+        debug_prefix = f"mask_debug_{self._debug_counter:04d}" if self.debug_output_dir else None
         
         # 1. 计算边缘密度图
         edge_density = self.compute_edge_density(edge_image)
+        if self.debug_output_dir:
+            out_dir = Path(self.debug_output_dir)
+            out_dir.mkdir(parents=True, exist_ok=True)
+            np.save(out_dir / f"{debug_prefix}_edge_density.npy", edge_density)
+            # 保存可视化（0-1映射到0-255）
+            vis = (edge_density * 255).astype(np.uint8)
+            cv2.imwrite(str(out_dir / f"{debug_prefix}_edge_density_vis.png"), vis)
+            print(f"[MaskDebug] {debug_prefix} edge_density saved, "
+                  f"min={edge_density.min():.4f} max={edge_density.max():.4f}")
         
         # 2. 初始化mask
         mask = np.zeros((h, w), dtype=np.uint8)
@@ -238,11 +289,12 @@ class ComplexMaskGenerator:
         area_per_block = target_area // num_blocks
         
         for i in range(num_blocks):
-            # 采样中心点（基于边缘密度）
+            # 采样中心点（基于边缘密度），仅第一次调用输出debug
             cy, cx = self.sample_center_from_density(
                 edge_density,
                 params["edge_density_weight"],
-                params["edge_density_threshold"]
+                params["edge_density_threshold"],
+                debug_log_prefix=f"{debug_prefix}_block{i}" if (debug_prefix and i == 0) else None
             )
             
             # 计算块大小（确保不会太小）
@@ -272,8 +324,9 @@ class ComplexMaskGenerator:
         # 5. 添加笔刷描边
         if np.random.random() < params["brush_stroke_prob"]:
             num_strokes = np.random.randint(1, 4)  # 1-3条笔刷描边
-            for _ in range(num_strokes):
-                self.add_brush_strokes(mask, edge_density)
+            for stroke_i in range(num_strokes):
+                dbg = f"{debug_prefix}_brush{stroke_i}" if (debug_prefix and stroke_i == 0) else None
+                self.add_brush_strokes(mask, edge_density, debug_log_prefix=dbg)
         
         # 6. 应用形态学操作
         if np.random.random() < params["morphology_prob"]:

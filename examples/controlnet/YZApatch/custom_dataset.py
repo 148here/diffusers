@@ -137,12 +137,17 @@ class InpaintingSketchDataset(Dataset):
             self.edge_cache_manager = None
             print(f"[InpaintingSketchDataset] Edge cache disabled (will extract edges in real-time)")
         
-        # 初始化mask生成器
-        self.mask_generator = ComplexMaskGenerator(self.mask_params)
+        # 初始化mask生成器（debug_edge时传入输出目录以输出详细统计）
+        mp = dict(self.mask_params)
+        if self.debug_edge and self.debug_edge_output_dir:
+            mp["_debug_output_dir"] = str(self.debug_edge_output_dir)
+        self.mask_generator = ComplexMaskGenerator(mp)
         
         print(f"[InpaintingSketchDataset] Initialized with resolution={resolution}")
         print(f"[InpaintingSketchDataset] DexiNed checkpoint: {self.dexined_checkpoint}")
         print(f"[InpaintingSketchDataset] Sketch params: {self.sketch_params}")
+        if self.debug_edge and self.debug_edge_output_dir:
+            print(f"[InpaintingSketchDataset] Debug mode: edge + mask stats -> {self.debug_edge_output_dir}")
     
     def _scan_images(self) -> List[Path]:
         """
