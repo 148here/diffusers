@@ -126,6 +126,8 @@ class ComplexMaskGenerator:
             if do_debug:
                 self._write_debug_log(debug_log_prefix, edge_density, prob_map, prob_sum, False)
         
+        # 再次归一化确保sum=1，避免浮点误差导致np.random.choice报错
+        flat_prob = flat_prob / flat_prob.sum()
         idx = np.random.choice(len(flat_prob), p=flat_prob)
         cy, cx = divmod(idx, w)
         return int(cy), int(cx)
