@@ -91,7 +91,7 @@ train_images/
 使用以下命令启动训练：
 
 ```bash
-accelerate launch train_controlnet_sdxl.py \
+accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml train_controlnet_sdxl.py \
   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
   --use_custom_dataset \
