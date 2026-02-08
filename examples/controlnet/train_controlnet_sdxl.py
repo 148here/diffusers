@@ -65,6 +65,7 @@ if is_wandb_available():
 check_min_version("0.37.0.dev0")
 
 logger = get_logger(__name__)
+_early_logger = logging.getLogger(__name__)  # For use before Accelerator init
 if is_torch_npu_available():
     torch.npu.config.allow_internal_format = False
 
@@ -79,14 +80,14 @@ if yzapatch_dir.exists():
         from custom_dataset import InpaintingSketchDataset
         from dataset_wrapper import create_huggingface_dataset
         USE_CUSTOM_DATASET = True
-        logger.info("YZApatch custom dataset module loaded successfully")
+        _early_logger.info("YZApatch custom dataset module loaded successfully")
     except ImportError as e:
         USE_CUSTOM_DATASET = False
-        logger.warning(f"YZApatch module found but failed to import: {e}")
-        logger.warning("Falling back to standard dataset loading")
+        _early_logger.warning(f"YZApatch module found but failed to import: {e}")
+        _early_logger.warning("Falling back to standard dataset loading")
 else:
     USE_CUSTOM_DATASET = False
-    logger.info("YZApatch not found, using standard dataset loading")
+    _early_logger.info("YZApatch not found, using standard dataset loading")
 # ============================================================================
 
 # ============================================================
@@ -100,13 +101,13 @@ try:
         from custom_dataset import InpaintingSketchDataset
         from dataset_wrapper import create_huggingface_dataset
         USE_CUSTOM_DATASET = True
-        logger.info("YZApatch module loaded successfully")
+        _early_logger.info("YZApatch module loaded successfully")
     else:
         USE_CUSTOM_DATASET = False
-        logger.warning("YZApatch directory not found, custom dataset features disabled")
+        _early_logger.warning("YZApatch directory not found, custom dataset features disabled")
 except Exception as e:
     USE_CUSTOM_DATASET = False
-    logger.warning(f"Failed to import YZApatch: {e}. Custom dataset features disabled.")
+    _early_logger.warning(f"Failed to import YZApatch: {e}. Custom dataset features disabled.")
 
 
 def log_validation(vae, unet, controlnet, args, accelerator, weight_dtype, step, is_final_validation=False):
