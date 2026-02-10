@@ -21,22 +21,30 @@ accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_4
   --use_custom_dataset \
   --enable_edge_cache \
   --resolution=512 \
-  --learning_rate=1e-5 \
-  --train_batch_size=16 \
+  --learning_rate=2e-5 \
+  --lr_scheduler="cosine_with_restarts" \
+  --lr_num_cycles=5 \
+  --lr_warmup_steps=500 \
+  --train_batch_size=12 \
   --gradient_accumulation_steps=4 \
-  --max_train_steps=45000 \
-  --checkpointing_steps=10000 \
-  --output_dir="/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/1" \
+  --max_train_steps=30000 \
+  --checkpointing_steps=5000 \
+  --output_dir="/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2" \
   --proportion_empty_prompts=1.0 \
   --mixed_precision="fp16" \
   --enable_xformers_memory_efficient_attention \
   --dataloader_num_workers=4 \
   --report_to="tensorboard" \
-  --parallel_preload
+  --parallel_preload \
+  2>&1 | tee -a "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/redirect/train_$(date +%Y%m%d_%H%M%S).log"
+
+tensorboard --logdir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/1/logs/sd_xl_train_controlnet"
+
+grep -n "Traceback" train_20260210_153012.log
 
 准备mask和sketch
-python -m diffusers.examples.controlnet.YZAtool.generate_test_edges \
-  --input_dir "你的test目录" \
+python /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/YZAtool/generate_test_edges.py \
+  --input_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/artbench/export_512/test" \
   --resolution 512
 
 推理：
