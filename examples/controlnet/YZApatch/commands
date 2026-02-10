@@ -14,7 +14,7 @@ ln -s /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/dat
       /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/DexiNed
 
 
-
+正常训练：
 accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
@@ -34,22 +34,40 @@ accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_4
   --report_to="tensorboard" \
   --parallel_preload
 
+准备mask和sketch
+python -m diffusers.examples.controlnet.YZAtool.generate_test_edges \
+  --input_dir "你的test目录" \
+  --resolution 512
 
-accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
-  --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
-  --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
-  --use_custom_dataset \
-  --enable_edge_cache \
-  --resolution=512 \
-  --learning_rate=1e-5 \
-  --train_batch_size=16 \
-  --gradient_accumulation_steps=4 \
-  --max_train_steps=60000 \
-  --checkpointing_steps=10000 \
-  --output_dir="/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/1" \
-  --proportion_empty_prompts=1.0 \
-  --mixed_precision="fp16" \
-  --enable_xformers_memory_efficient_attention \
-  --dataloader_num_workers=4 \
-  --report_to="tensorboard" \
-  --max_train_samples 100
+推理：
+python YZAtool/inference_inpaint_sdxl_controlnet.py \
+  --input_dir "/path/to/your/test" \
+  --output_dir "/path/to/your/test_inpaint" \
+  --pretrained_model_name_or_path "diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
+  --controlnet_model_name_or_path "/path/to/your/trained/controlnet" \
+  --resolution 512 \
+  --batch_size 4 \
+  --num_inference_steps 20 \
+  --guidance_scale 5.0 \
+  --device cuda \
+  --prompt "" \
+  --strict_mode
+
+# accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
+#   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
+#   --controlnet_model_name_or_path="xinsir/controlnet-scribble-sdxl-1.0" \
+#   --use_custom_dataset \
+#   --enable_edge_cache \
+#   --resolution=512 \
+#   --learning_rate=1e-5 \
+#   --train_batch_size=16 \
+#   --gradient_accumulation_steps=4 \
+#   --max_train_steps=60000 \
+#   --checkpointing_steps=10000 \
+#   --output_dir="/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/1" \
+#   --proportion_empty_prompts=1.0 \
+#   --mixed_precision="fp16" \
+#   --enable_xformers_memory_efficient_attention \
+#   --dataloader_num_workers=4 \
+#   --report_to="tensorboard" \
+#   --max_train_samples 100

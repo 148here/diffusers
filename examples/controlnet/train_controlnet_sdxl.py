@@ -1479,16 +1479,18 @@ def main(args):
                             "or ensure your dataset has a 'mask' column (white=inpaint, black=preserve)."
                         )
                     latent_h, latent_w = latents.shape[2], latents.shape[3]
+                    pixel_values_batch = batch["pixel_values"].to(device=latents.device, dtype=weight_dtype)
                     mask = batch["mask_values"].to(device=latents.device, dtype=weight_dtype)
 
-                    # Resize mask to latent resolution (B, 1, H, W) -> (B, 1, H//8, W//8) for concat
-                    mask_latent = F.interpolate(mask, size=(latent_h, latent_w), mode="nearest")
-
-                    # masked_image = pixel_values * (1 - mask): zero out inpaint regions (need mask at pixel resolution)
-                    pixel_values_batch = batch["pixel_values"].to(device=latents.device, dtype=weight_dtype)
-                    mask_pixel = F.interpolate(mask, size=(pixel_values_batch.shape[2], pixel_values_batch.shape[3]), mode="nearest")
-                    preserve_mask = (1 - mask_pixel).expand_as(pixel_values_batch)
+                    # mask at image resolution (512x512) for masked_image: pixel_values * (1 - mask)
+                    mask_image = F.interpolate(
+                        mask, size=(pixel_values_batch.shape[2], pixel_values_batch.shape[3]), mode="nearest"
+                    )
+                    preserve_mask = (1 - mask_image).expand_as(pixel_values_batch)
                     masked_image = pixel_values_batch * preserve_mask
+
+                    # mask at latent resolution (64x64) for UNet concat
+                    mask_latent = F.interpolate(mask, size=(latent_h, latent_w), mode="nearest")
 
                     # VAE encode masked image -> masked_image_latents (4 channels)
                     # Cast to vae.dtype to avoid "Input type (Half) and bias type (float) should be the same"
