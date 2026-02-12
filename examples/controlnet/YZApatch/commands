@@ -55,14 +55,16 @@ python /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/exampl
   --input_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/artbench/export_512/test" \
   --output_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2/test_artbench" \
   --pretrained_model_name_or_path "diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
-  --controlnet_model_name_or_path "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2/checkpoint-30000/controlnet/diffusion_pytorch_model.safetensors" \
+  --controlnet_model_name_or_path "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2/checkpoint-30000/controlnet/" \
   --resolution 512 \
   --batch_size 4 \
   --num_inference_steps 20 \
   --guidance_scale 5.0 \
   --device cuda \
   --prompt "" \
-  --strict_mode
+  --strict_mode \
+  --debug \
+  --result_comparison  \
 
 # accelerate launch --config_file /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/Edge-JointDiT/my_config.yaml /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/train_controlnet_sdxl.py \
 #   --pretrained_model_name_or_path="diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
