@@ -90,21 +90,30 @@ def build_pipeline(args: argparse.Namespace):
         torch_dtype=torch_dtype,
     )
 
-    vae = None
+    # 默认使用 base 模型自带的 VAE；只有在显式提供 --pretrained_vae_model_name_or_path 时才覆盖
     if args.pretrained_vae_model_name_or_path is not None:
-        logger.info("Loading VAE from %s", args.pretrained_vae_model_name_or_path)
+        logger.info("Loading custom VAE from %s", args.pretrained_vae_model_name_or_path)
         vae = AutoencoderKL.from_pretrained(
             args.pretrained_vae_model_name_or_path,
             torch_dtype=torch_dtype,
         )
-
-    logger.info("Loading base SDXL inpainting model from %s", args.pretrained_model_name_or_path)
-    pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
-        args.pretrained_model_name_or_path,
-        controlnet=controlnet,
-        vae=vae,
-        torch_dtype=torch_dtype,
-    )
+        logger.info("Loading base SDXL inpainting model from %s (with custom VAE)", args.pretrained_model_name_or_path)
+        pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
+            args.pretrained_model_name_or_path,
+            controlnet=controlnet,
+            vae=vae,
+            torch_dtype=torch_dtype,
+        )
+    else:
+        logger.info(
+            "Loading base SDXL inpainting model from %s (using built-in VAE)",
+            args.pretrained_model_name_or_path,
+        )
+        pipe = StableDiffusionXLControlNetInpaintPipeline.from_pretrained(
+            args.pretrained_model_name_or_path,
+            controlnet=controlnet,
+            torch_dtype=torch_dtype,
+        )
 
     # 调整 scheduler，与 README_sdxl 中一致
     pipe.scheduler = UniPCMultistepScheduler.from_config(pipe.scheduler.config)
