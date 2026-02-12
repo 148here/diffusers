@@ -153,6 +153,30 @@ def _load_pil_image(path: Path, mode: str = "RGB") -> Image.Image:
         raise RuntimeError(f"加载图片失败: {path}，错误: {e}")
 
 
+def _create_masked_image(orig: Image.Image, mask: Image.Image) -> Image.Image:
+    """
+    创建 masked 原图：将 mask 叠加到原图上，用红色高亮显示 mask 区域。
+    
+    参数:
+        orig: 原图（RGB）
+        mask: mask 图（L，单通道，白色=需要修补的区域）
+    
+    返回:
+        masked 原图（RGB）
+    """
+    # 创建红色高亮层
+    red_overlay = Image.new("RGB", orig.size, (255, 0, 0))  # 红色
+    
+    # 使用 mask 作为 alpha 通道，将红色叠加到原图上
+    # mask 中白色区域（255）会显示红色，黑色区域（0）保持原图
+    masked = Image.composite(red_overlay, orig, mask)
+    
+    # 将 masked 区域与原图混合（半透明效果）
+    masked = Image.blend(orig, masked, alpha=0.5)
+    
+    return masked
+
+
 def run_inference_for_sample(
     sample: Sample,
     pipe: StableDiffusionXLControlNetInpaintPipeline,
@@ -192,6 +216,14 @@ def run_inference_for_sample(
 
     # 注意：StableDiffusionXLControlNetInpaintPipeline 接口
     # image: 原图；mask_image: 白=要修补；controlnet_conditioning_image: 条件图（这里用 sketch）
+    
+    # Debug 模式：输出图像信息和路径
+    if args.debug:
+        if orig is None:
+            raise RuntimeError(f"orig is None! path={sample.orig_path}")
+        print("orig:", type(orig), getattr(orig, "size", None), getattr(orig, "mode", None))
+        print("paths:", sample.orig_path, sample.sketch_path, sample.mask_path)
+    
     with torch.autocast(device.type) if device.type == "cuda" else torch.no_grad():  # type: ignore[arg-type]
         result = pipe(
             prompt=prompt,
@@ -206,6 +238,28 @@ def run_inference_for_sample(
 
     image = result.images[0]
     image.save(out_path)
+    
+    # 4. 如果启用了 result_comparison，生成 2x2 拼接对比图
+    if args.result_comparison:
+        masked_orig = _create_masked_image(orig, mask)
+        
+        # 创建 2x2 拼接图
+        resolution = args.resolution
+        comparison = Image.new("RGB", (resolution * 2, resolution * 2))
+        
+        # 左上：原图
+        comparison.paste(orig, (0, 0))
+        # 右上：masked 原图
+        comparison.paste(masked_orig, (resolution, 0))
+        # 左下：input sketch
+        comparison.paste(cond, (0, resolution))
+        # 右下：修复结果图
+        comparison.paste(image, (resolution, resolution))
+        
+        # 保存拼接图
+        comparison_path = out_dir / f"{stem}_comparison{suffix}"
+        comparison.save(comparison_path)
+    
     return out_path
 
 
@@ -324,6 +378,16 @@ def parse_args() -> argparse.Namespace:
         default="artbench",
         choices=["artbench", "mural1"],
         help="数据集类型，默认 artbench。",
+    )
+    parser.add_argument(
+        "--debug",
+        action="store_true",
+        help="启用调试模式：在推理前输出图像信息和路径。",
+    )
+    parser.add_argument(
+        "--result_comparison",
+        action="store_true",
+        help="生成结果对比图：输出一张2x2拼接图（原图+masked原图+sketch+修复结果）。",
     )
 
     args = parser.parse_args()
