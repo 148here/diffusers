@@ -47,12 +47,15 @@ python /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/exampl
   --input_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/artbench/export_512/test" \
   --resolution 512
 
+python /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/YZAtool/generate_test_edges.py \
+  --input_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/mural1/test" \
+  --resolution 512
 推理：
-python YZAtool/inference_inpaint_sdxl_controlnet.py \
-  --input_dir "/path/to/your/test" \
-  --output_dir "/path/to/your/test_inpaint" \
+python /cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/YZAtool/inference_inpaint_sdxl_controlnet.py \
+  --input_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/data/artbench/export_512/test" \
+  --output_dir "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2/test_artbench" \
   --pretrained_model_name_or_path "diffusers/stable-diffusion-xl-1.0-inpainting-0.1" \
-  --controlnet_model_name_or_path "/path/to/your/trained/controlnet" \
+  --controlnet_model_name_or_path "/cpfs01/projects-SSD/cfff-27504eab520e_SSD/zwz_42312/yza/diffusers/examples/controlnet/output/2/checkpoint-30000/controlnet/diffusion_pytorch_model.safetensors" \
   --resolution 512 \
   --batch_size 4 \
   --num_inference_steps 20 \
