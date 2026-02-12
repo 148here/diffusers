@@ -283,7 +283,7 @@ class Mural1DatasetLoader(DatasetLoader):
         """
         扫描候选图片文件。
         - 仅返回扩展名在 image_extensions 中的文件；
-        - 跳过 *_sketch / *_edge 文件（但不跳过 _mask，因为 mask 在单独目录）。
+        - 跳过 *_sketch / *_edge / *_mask 文件（mask 在单独的 mask_dir 目录中）。
         """
         if not root_dir.exists():
             raise ValueError(f"输入目录不存在: {root_dir}")
@@ -303,8 +303,8 @@ class Mural1DatasetLoader(DatasetLoader):
                 continue
 
             stem = path.stem
-            if stem.endswith("_sketch") or stem.endswith("_edge"):
-                # 跳过派生文件
+            if stem.endswith("_sketch") or stem.endswith("_edge") or stem.endswith("_mask"):
+                # 跳过派生文件（_mask 文件应该在单独的 mask_dir 中，原图目录中的 _mask 文件应被跳过）
                 continue
 
             yield path
