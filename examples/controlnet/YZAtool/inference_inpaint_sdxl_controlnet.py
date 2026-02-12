@@ -411,6 +411,12 @@ def parse_args() -> argparse.Namespace:
         help="数据集类型，默认 artbench。",
     )
     parser.add_argument(
+        "--mask_dir",
+        type=str,
+        default=None,
+        help="Mask 文件夹路径（仅 dataset=mural1 时需要）。mask 文件名与原图文件名相同。",
+    )
+    parser.add_argument(
         "--debug",
         action="store_true",
         help="启用调试模式：在推理前输出图像信息和路径。",
@@ -433,6 +439,10 @@ def parse_args() -> argparse.Namespace:
     if args.resolution % 8 != 0:
         raise ValueError("resolution 必须能被 8 整除，以与 SDXL 的 latent 分辨率对齐。")
 
+    # 验证 dataset=mural1 时必须提供 mask_dir
+    if args.dataset == "mural1" and args.mask_dir is None:
+        raise ValueError("dataset=mural1 时必须提供 --mask_dir 参数")
+
     return args
 
 
@@ -454,7 +464,11 @@ def main():
     logger.info("数据集类型: %s", args.dataset)
 
     # 1. 构建样本列表（递归扫描 + *_sketch / *_mask 匹配）
-    dataset_loader = get_dataset_loader(args.dataset)
+    mask_dir_path = Path(args.mask_dir).resolve() if args.mask_dir else None
+    if args.dataset == "mural1":
+        logger.info("Mask 目录: %s", mask_dir_path)
+
+    dataset_loader = get_dataset_loader(args.dataset, mask_dir=mask_dir_path)
     samples = dataset_loader.build_samples(input_dir, strict_mode=args.strict_mode)
     if not samples:
         logger.warning("没有可用样本，程序结束。")
