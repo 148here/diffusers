@@ -19,10 +19,8 @@ from __future__ import annotations
 
 import argparse
 import logging
-import sys
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable, List, Optional, Sequence, Tuple
+from typing import Optional
 
 import torch
 from PIL import Image
@@ -35,6 +33,7 @@ from diffusers import (
     UniPCMultistepScheduler,
 )
 
+from dataset_loader import Sample, get_dataset_loader
 
 logger = logging.getLogger(__name__)
 
@@ -46,187 +45,8 @@ DEFAULT_BATCH_SIZE: int = 4
 
 
 # ============================================================
-# 与 YZApatch.config 对齐的图片扩展名 / 递归策略
-# 尽量从 YZApatch.config 读取；若导入失败，则退回到内置默认值。
+# 数据集加载逻辑已移至 dataset_loader.py 模块
 # ============================================================
-
-def _load_yzapatch_image_config():
-    """
-    尝试从 YZApatch.config 读取 IMAGE_EXTENSIONS 和 RECURSIVE_SCAN。
-    如果导入失败，则返回一组安全的默认值。
-    """
-    current_dir = Path(__file__).resolve().parent
-    yzapatch_dir = current_dir.parent / "YZApatch"
-
-    image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".webp"]
-    recursive_scan = True
-
-    if yzapatch_dir.exists():
-        if str(yzapatch_dir) not in sys.path:
-            sys.path.insert(0, str(yzapatch_dir))
-        try:
-            from config import IMAGE_EXTENSIONS, RECURSIVE_SCAN  # type: ignore
-
-            image_extensions = [ext.lower() for ext in IMAGE_EXTENSIONS]
-            recursive_scan = bool(RECURSIVE_SCAN)
-            logger.info(
-                "Loaded IMAGE_EXTENSIONS and RECURSIVE_SCAN from YZApatch.config: %s, recursive=%s",
-                image_extensions,
-                recursive_scan,
-            )
-        except Exception as e:  # pragma: no cover - 容错路径
-            logger.warning(
-                "Failed to import IMAGE_EXTENSIONS / RECURSIVE_SCAN from YZApatch.config: %s. "
-                "Falling back to built-in defaults.",
-                e,
-            )
-    else:
-        logger.info("YZApatch directory not found, using built-in IMAGE_EXTENSIONS defaults")
-
-    return image_extensions, recursive_scan
-
-
-@dataclass
-class Sample:
-    """单个推理样本的信息。"""
-
-    orig_path: Path
-    sketch_path: Path
-    mask_path: Path
-    rel_path: Path  # 相对于 input_dir 的相对路径（用于镜像输出结构）
-
-
-def _iter_candidate_images(
-    root_dir: Path,
-    image_extensions: Sequence[str],
-    recursive_scan: bool,
-) -> Iterable[Path]:
-    """
-    参考 YZAtool.generate_test_edges.find_candidate_images：
-    - 仅返回扩展名在 image_extensions 中的文件；
-    - 跳过 *_sketch / *_mask 文件；
-    """
-    if not root_dir.exists():
-        raise ValueError(f"输入目录不存在: {root_dir}")
-
-    image_extensions = [ext.lower() for ext in image_extensions]
-
-    if recursive_scan:
-        iterator = root_dir.rglob("*")
-    else:
-        iterator = root_dir.glob("*")
-
-    for path in iterator:
-        if not path.is_file():
-            continue
-        suffix = path.suffix.lower()
-        if suffix not in image_extensions:
-            continue
-
-        stem = path.stem
-        if stem.endswith("_sketch") or stem.endswith("_mask"):
-            # 已经是派生文件，跳过
-            continue
-
-        yield path
-
-
-def _find_matching_derivatives(
-    img_path: Path,
-    image_extensions: Sequence[str],
-) -> Tuple[Optional[Path], Optional[Path]]:
-    """
-    给定原图路径 xxx.ext，在同目录寻找：
-    - xxx_sketch.*（优先使用原扩展名；如果不存在，则在 image_extensions 中依次尝试）
-    - xxx_mask.*   （同上）
-    若找不到则返回 (None, None) 或者对应位置为 None。
-    """
-    stem = img_path.stem
-    suffix = img_path.suffix.lower()
-    parent = img_path.parent
-
-    # 优先尝试与原图相同扩展名
-    sketch_candidates: List[Path] = [parent / f"{stem}_sketch{suffix}"]
-    mask_candidates: List[Path] = [parent / f"{stem}_mask{suffix}"]
-
-    # 其他扩展名补充尝试
-    for ext in image_extensions:
-        ext = ext.lower()
-        if ext == suffix:
-            continue
-        sketch_candidates.append(parent / f"{stem}_sketch{ext}")
-        mask_candidates.append(parent / f"{stem}_mask{ext}")
-
-    sketch_path: Optional[Path] = None
-    mask_path: Optional[Path] = None
-
-    for p in sketch_candidates:
-        if p.is_file():
-            sketch_path = p
-            break
-
-    for p in mask_candidates:
-        if p.is_file():
-            mask_path = p
-            break
-
-    return sketch_path, mask_path
-
-
-def build_samples(
-    input_dir: Path,
-    strict_mode: bool = True,
-) -> List[Sample]:
-    """
-    扫描 input_dir，构建所有样本列表。
-
-    规则：
-    - 递归策略与图片扩展名来自 YZApatch.config（或内置默认）；
-    - 对于每个原图 xxx.ext，必须能在同目录找到 xxx_sketch.* 和 xxx_mask.*；
-      - 若 strict_mode=True：缺失即报错退出；
-      - 若 strict_mode=False：打印 warning 并跳过该样本。
-    """
-    image_extensions, recursive_scan = _load_yzapatch_image_config()
-
-    samples: List[Sample] = []
-    missing_count = 0
-
-    for img_path in _iter_candidate_images(input_dir, image_extensions, recursive_scan):
-        sketch_path, mask_path = _find_matching_derivatives(img_path, image_extensions)
-
-        if sketch_path is None or mask_path is None:
-            missing_parts = []
-            if sketch_path is None:
-                missing_parts.append("sketch")
-            if mask_path is None:
-                missing_parts.append("mask")
-            missing_str = "/".join(missing_parts)
-            msg = f"[MISSING] {img_path} 缺少派生文件: {missing_str}"
-
-            if strict_mode:
-                raise FileNotFoundError(msg)
-            else:
-                logger.warning(msg)
-                missing_count += 1
-                continue
-
-        rel_path = img_path.relative_to(input_dir)
-        samples.append(
-            Sample(
-                orig_path=img_path,
-                sketch_path=sketch_path,
-                mask_path=mask_path,
-                rel_path=rel_path,
-            )
-        )
-
-    if not samples:
-        logger.warning("在 %s 中未找到任何有效样本（strict_mode=%s）", input_dir, strict_mode)
-
-    if missing_count > 0 and not strict_mode:
-        logger.warning("共有 %d 个样本因缺少 sketch/mask 被跳过。", missing_count)
-
-    return samples
 
 
 # ============================================================
@@ -498,6 +318,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="在 CUDA 环境下尝试启用 xFormers 省显存注意力（若已正确安装）。",
     )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="artbench",
+        choices=["artbench", "mural1"],
+        help="数据集类型，默认 artbench。",
+    )
 
     args = parser.parse_args()
 
@@ -529,9 +356,11 @@ def main():
 
     logger.info("输入目录: %s", input_dir)
     logger.info("输出目录: %s", output_root)
+    logger.info("数据集类型: %s", args.dataset)
 
     # 1. 构建样本列表（递归扫描 + *_sketch / *_mask 匹配）
-    samples = build_samples(input_dir, strict_mode=args.strict_mode)
+    dataset_loader = get_dataset_loader(args.dataset)
+    samples = dataset_loader.build_samples(input_dir, strict_mode=args.strict_mode)
     if not samples:
         logger.warning("没有可用样本，程序结束。")
         return
