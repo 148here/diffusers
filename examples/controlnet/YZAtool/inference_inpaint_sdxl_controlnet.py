@@ -216,14 +216,36 @@ def run_inference_for_sample(
 
     # 注意：StableDiffusionXLControlNetInpaintPipeline 接口
     # image: 原图；mask_image: 白=要修补；controlnet_conditioning_image: 条件图（这里用 sketch）
-    
-    # Debug 模式：输出图像信息和路径
+
+    # Debug 模式：输出更详细的图像 / 参数信息，帮助定位 NoneType 问题
     if args.debug:
         if orig is None:
             raise RuntimeError(f"orig is None! path={sample.orig_path}")
-        print("orig:", type(orig), getattr(orig, "size", None), getattr(orig, "mode", None))
-        print("paths:", sample.orig_path, sample.sketch_path, sample.mask_path)
-    
+
+        print("[DEBUG] sample paths:")
+        print("  orig :", sample.orig_path)
+        print("  sketch:", sample.sketch_path)
+        print("  mask :", sample.mask_path)
+
+        print("[DEBUG] orig  :", type(orig), getattr(orig, "size", None), getattr(orig, "mode", None), "id=", id(orig))
+        print("[DEBUG] cond  :", type(cond), getattr(cond, "size", None), getattr(cond, "mode", None), "id=", id(cond))
+        print("[DEBUG] mask  :", type(mask), getattr(mask, "size", None), getattr(mask, "mode", None), "id=", id(mask))
+
+        print("[DEBUG] pipe  :", type(pipe))
+        print("[DEBUG] device:", device, "dtype:", getattr(pipe, "dtype", None))
+        print(
+            "[DEBUG] kwargs: "
+            f"steps={args.num_inference_steps}, guidance_scale={args.guidance_scale}, "
+            f"prompt_len={len(prompt) if isinstance(prompt, str) else 'N/A'}"
+        )
+
+        # 直接调用 pipeline 的 check_image，看看当前 orig 是否被认为是合法输入
+        try:
+            pipe.check_image(orig, prompt, None)
+            print("[DEBUG] pipe.check_image(orig, ...) PASSED")
+        except Exception as e:
+            print("[DEBUG] pipe.check_image(orig, ...) RAISED:", repr(e))
+
     with torch.autocast(device.type) if device.type == "cuda" else torch.no_grad():  # type: ignore[arg-type]
         result = pipe(
             prompt=prompt,
