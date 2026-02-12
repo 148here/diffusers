@@ -215,7 +215,7 @@ def run_inference_for_sample(
     negative_prompt = args.negative_prompt
 
     # 注意：StableDiffusionXLControlNetInpaintPipeline 接口
-    # image: 原图；mask_image: 白=要修补；controlnet_conditioning_image: 条件图（这里用 sketch）
+    # image: 原图；mask_image: 白=要修补；control_image: ControlNet 条件图（这里用 sketch）
 
     # Debug 模式：输出更详细的图像 / 参数信息，帮助定位 NoneType 问题
     if args.debug:
@@ -251,7 +251,7 @@ def run_inference_for_sample(
             prompt=prompt,
             image=orig,
             mask_image=mask,
-            controlnet_conditioning_image=cond,
+            control_image=cond,
             num_inference_steps=args.num_inference_steps,
             guidance_scale=args.guidance_scale,
             negative_prompt=negative_prompt,
